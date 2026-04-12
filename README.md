@@ -65,6 +65,9 @@ Download the latest `.deb` or `.AppImage` from the [Releases](https://github.com
 # .deb
 sudo dpkg -i streambert_*.deb
 
+# Arch Linux (.pkg.tar.zst)
+sudo pacman -U streambert-*.pkg.tar.zst
+
 # .AppImage (you can also do it with Gearlever)
 chmod +x Streambert-x64.AppImage && ./Streambert-x64.AppImage
 ```
@@ -89,6 +92,20 @@ or
 ```bash
 npm run dist:linux
 ```
+or (for Arch Linux)
+```bash
+npm run dist:arch
+```
+or (for an AppImage only)
+```bash
+npm run dist:appimage
+# To run:
+chmod +x dist/Streambert-*.AppImage && ./dist/Streambert-*.AppImage
+```
+
+> [!IMPORTANT]
+> If you are building on Arch Linux and encounter a `libcrypt.so.1` error, install the compatibility library:
+> `sudo pacman -S libxcrypt-compat`
 
 ---
 ## Project Structure
