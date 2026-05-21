@@ -21,6 +21,10 @@ const downloadsFile = () =>
 // Track running child processes by download id
 const activeProcs = new Map();
 
+// ── Trusted binary registry ───────────────────────────────────────────────────
+// Maps session tokens (returned to the Renderer)
+const trustedBinaryPaths = new Map(); // token (uuid) → absolute binary path
+
 let _getMainWindow = () => null;
 
 function sendProgress(update) {
@@ -183,7 +187,8 @@ function register(getMainWindow) {
     try {
       entries = fs.readdirSync(folderPath);
     } catch (e) {
-      const reason = e.code === "EACCES" ? "folder_permission" : "folder_unreadable";
+      const reason =
+        e.code === "EACCES" ? "folder_permission" : "folder_unreadable";
       return { exists: false, reason };
     }
     if (!entries.includes("_internal")) {
@@ -202,7 +207,13 @@ function register(getMainWindow) {
       }
     });
     if (!binary) return { exists: false, reason: "no_executable" };
-    return { exists: true, binaryPath: path.join(folderPath, binary) };
+
+    // Store the validated path in the Main process only and hand a token to
+    // the Renderer.  The Renderer passes the token back when starting a
+    // download; the real path is never exposed outside the Main process.
+    const token = crypto.randomUUID();
+    trustedBinaryPaths.set(token, path.join(folderPath, binary));
+    return { exists: true, token };
   });
 
   // ── start download ────────────────────────────────────────────────────────
@@ -211,7 +222,7 @@ function register(getMainWindow) {
     (
       _,
       {
-        binaryPath,
+        token,
         m3u8Url,
         name,
         downloadPath,
@@ -225,6 +236,11 @@ function register(getMainWindow) {
       },
     ) => {
       try {
+        // Resolve the binary path from trusted registry.
+        const binaryPath = trustedBinaryPaths.get(token);
+        if (!binaryPath) {
+          return { ok: false, error: "Invalid or unknown downloader token" };
+        }
         const id = crypto.randomUUID();
         const logPath = path.join(os.tmpdir(), `streambert_dl_${id}.log`);
 
@@ -290,21 +306,7 @@ function register(getMainWindow) {
           downloadPath,
         ];
 
-        // Validate downloader binary path
-        const resolvedPath = path.resolve(binaryPath);
-        const folderPath = path.dirname(resolvedPath);
-        let isPathValid = false;
-        try {
-          if (fs.existsSync(path.join(folderPath, "_internal"))) {
-            isPathValid = true;
-          }
-        } catch {}
-
-        if (!isPathValid) {
-          return { ok: false, error: "Unauthorized downloader binary path" };
-        }
-
-        const proc = spawn(resolvedPath, args, {
+        const proc = spawn(binaryPath, args, {
           stdio: ["ignore", "pipe", "pipe"],
         });
         activeProcs.set(id, proc);
