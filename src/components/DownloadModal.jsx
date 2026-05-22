@@ -511,7 +511,7 @@ export default function DownloadModal({
   };
 
   const handleDownload = async () => {
-    if (!downloader?.binaryPath || !downloadPath || !m3u8Url) return;
+    if (!downloader?.token || !downloadPath || !m3u8Url) return;
     setDownloadStatus("starting");
 
     let resolvedSubs = [...subtitles];
@@ -542,7 +542,7 @@ export default function DownloadModal({
     }
 
     const result = await window.electron.runDownload({
-      binaryPath: downloader.binaryPath,
+      token: downloader.token,
       m3u8Url,
       subtitles: resolvedSubs,
       name: mediaName,
@@ -1120,7 +1120,8 @@ export default function DownloadModal({
                           !downloader.reason) && (
                           <>
                             No executable binary found. On Linux, make sure the
-                            binary has execute permissions (<code>chmod +x</code>
+                            binary has execute permissions (
+                            <code>chmod +x</code>
                             ).
                           </>
                         )}
