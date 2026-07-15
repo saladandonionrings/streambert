@@ -38,6 +38,12 @@ const TYPE_FILTERS = [
   { id: "tv", label: "Series" },
 ];
 
+const SORT_OPTIONS = [
+  { id: "popularity", label: "Popularity" },
+  { id: "rating", label: "Top Rated" },
+  { id: "newest", label: "Newest" },
+];
+
 // A genre chip is only clickable for a given type filter if it maps to at
 // least one id on that side (or "all", which just needs either side).
 function genreSupportsType(genre, typeFilter) {
@@ -46,12 +52,29 @@ function genreSupportsType(genre, typeFilter) {
   return !!(genre.movieId || genre.tvId);
 }
 
-async function fetchGenrePage(genre, typeFilter, pageNum, apiKey) {
+// Build the sort_by (+ supporting filter) query params for a given sort
+// option and media type. "Top Rated" requires a vote_count floor so a movie
+// with a single 10/10 vote doesn't outrank genuinely acclaimed titles.
+// "Newest" excludes unreleased/undated titles so the list isn't dominated by
+// festival-only or straight-to-video entries with no real release yet.
+function buildSortParams(sortId, mediaType) {
+  if (sortId === "rating") {
+    return "sort_by=vote_average.desc&vote_count.gte=200";
+  }
+  if (sortId === "newest") {
+    const today = new Date().toISOString().slice(0, 10);
+    const dateField = mediaType === "tv" ? "first_air_date" : "primary_release_date";
+    return `sort_by=${dateField}.desc&${dateField}.lte=${today}&vote_count.gte=1`;
+  }
+  return "sort_by=popularity.desc";
+}
+
+async function fetchGenrePage(genre, typeFilter, sortId, pageNum, apiKey) {
   const requests = [];
   if ((typeFilter === "all" || typeFilter === "movie") && genre.movieId) {
     requests.push(
       tmdbFetch(
-        `/discover/movie?with_genres=${genre.movieId}&sort_by=popularity.desc&page=${pageNum}`,
+        `/discover/movie?with_genres=${genre.movieId}&${buildSortParams(sortId, "movie")}&page=${pageNum}`,
         apiKey,
       )
         .then((d) => ({
@@ -67,7 +90,7 @@ async function fetchGenrePage(genre, typeFilter, pageNum, apiKey) {
   if ((typeFilter === "all" || typeFilter === "tv") && genre.tvId) {
     requests.push(
       tmdbFetch(
-        `/discover/tv?with_genres=${genre.tvId}&sort_by=popularity.desc&page=${pageNum}`,
+        `/discover/tv?with_genres=${genre.tvId}&${buildSortParams(sortId, "tv")}&page=${pageNum}`,
         apiKey,
       )
         .then((d) => ({
@@ -103,6 +126,7 @@ export default function GenresPage({
   onMarkUnwatched,
 }) {
   const [typeFilter, setTypeFilter] = useState("all");
+  const [sortBy, setSortBy] = useState("popularity");
   const [selectedGenre, setSelectedGenre] = useState(GENRES[0]);
   const [items, setItems] = useState([]);
   const [page, setPage] = useState(1);
@@ -146,7 +170,7 @@ export default function GenresPage({
     setItems([]);
     setPage(1);
 
-    fetchGenrePage(selectedGenre, typeFilter, 1, apiKey)
+    fetchGenrePage(selectedGenre, typeFilter, sortBy, 1, apiKey)
       .then(({ items: newItems, totalPages: tp }) => {
         if (requestIdRef.current !== myId) return;
         for (const it of newItems) seenKeysRef.current.add(`${it.media_type}_${it.id}`);
@@ -158,7 +182,7 @@ export default function GenresPage({
         if (requestIdRef.current !== myId) return;
         setLoading(false);
       });
-  }, [selectedGenre, typeFilter, apiKey, offline]);
+  }, [selectedGenre, typeFilter, sortBy, apiKey, offline]);
 
   const loadMore = useCallback(() => {
     if (loadingMore || loading || page >= totalPages) return;
@@ -166,7 +190,7 @@ export default function GenresPage({
     const nextPage = page + 1;
     setLoadingMore(true);
 
-    fetchGenrePage(selectedGenre, typeFilter, nextPage, apiKey)
+    fetchGenrePage(selectedGenre, typeFilter, sortBy, nextPage, apiKey)
       .then(({ items: newItems }) => {
         if (requestIdRef.current !== myId) return;
         const fresh = newItems.filter((it) => {
@@ -180,7 +204,16 @@ export default function GenresPage({
         setLoadingMore(false);
       })
       .catch(() => setLoadingMore(false));
-  }, [loadingMore, loading, page, totalPages, selectedGenre, typeFilter, apiKey]);
+  }, [
+    loadingMore,
+    loading,
+    page,
+    totalPages,
+    selectedGenre,
+    typeFilter,
+    sortBy,
+    apiKey,
+  ]);
 
   return (
     <div className="fade-in">
@@ -192,16 +225,30 @@ export default function GenresPage({
       </div>
 
       <div className="genre-filter-bar">
-        <div className="type-toggle">
-          {TYPE_FILTERS.map((t) => (
-            <button
-              key={t.id}
-              className={`type-toggle-btn${typeFilter === t.id ? " type-toggle-btn--active" : ""}`}
-              onClick={() => setTypeFilter(t.id)}
-            >
-              {t.label}
-            </button>
-          ))}
+        <div className="genre-filter-row">
+          <div className="type-toggle">
+            {TYPE_FILTERS.map((t) => (
+              <button
+                key={t.id}
+                className={`type-toggle-btn${typeFilter === t.id ? " type-toggle-btn--active" : ""}`}
+                onClick={() => setTypeFilter(t.id)}
+              >
+                {t.label}
+              </button>
+            ))}
+          </div>
+
+          <div className="type-toggle">
+            {SORT_OPTIONS.map((s) => (
+              <button
+                key={s.id}
+                className={`type-toggle-btn${sortBy === s.id ? " type-toggle-btn--active" : ""}`}
+                onClick={() => setSortBy(s.id)}
+              >
+                {s.label}
+              </button>
+            ))}
+          </div>
         </div>
 
         <div className="genre-chip-row">

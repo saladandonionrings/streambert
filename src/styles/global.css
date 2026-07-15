@@ -1010,6 +1010,12 @@ body.no-anim *::after {
     gap: 18px;
 }
 
+.genre-filter-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 12px;
+}
+
 .type-toggle {
     display: inline-flex;
     gap: 4px;
