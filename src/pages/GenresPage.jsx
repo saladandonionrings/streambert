@@ -330,6 +330,7 @@ export default function GenresPage({
                       onMarkUnwatched={onMarkUnwatched}
                       ageRating={r.cert}
                       restricted={restr}
+                      overview={item.overview}
                     />
                   );
                 })}
